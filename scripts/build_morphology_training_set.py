@@ -86,6 +86,38 @@ def rasterize_nodule_mask(rois, vol_shape_zyx, spacing_zyx, origin_xyz):
     return mask
 
 
+def rasterize_nodule_mask_local(rois, crop_shape_zyx, spacing_zyx, origin_zyx_mm, crop_offset_zyx_idx):
+    """Same as rasterize_nodule_mask, but rasterizes directly into a small
+    pre-cropped local volume instead of the full scan — this is what makes
+    per-nodule processing fast instead of resampling the whole 512x512xN scan.
+    Each ROI's own true z-slice is preserved (no flattening to one slice)."""
+    mask = np.zeros(crop_shape_zyx, dtype=np.uint8)
+    sz = spacing_zyx[0]
+    oz_mm = origin_zyx_mm[0]
+    z0_off, y0_off, x0_off = crop_offset_zyx_idx
+
+    for roi in rois:
+        z_mm = roi.get("z_position")
+        if z_mm is None:
+            continue
+        z_idx_global = int(round((z_mm - oz_mm) / sz))
+        z_idx_local = z_idx_global - z0_off
+        if not (0 <= z_idx_local < crop_shape_zyx[0]):
+            continue
+
+        pts = _get_polygon_points(roi)
+        if len(pts) < 3:
+            continue
+        xs = np.array([p[0] - x0_off for p in pts])
+        ys = np.array([p[1] - y0_off for p in pts])
+        try:
+            rr, cc = sk_polygon(ys, xs, shape=crop_shape_zyx[1:])
+            mask[z_idx_local, rr, cc] = 1
+        except Exception:
+            continue
+    return mask
+
+
 def build_training_set(xml_root="dataset/LIDC-XML-only",
                         dataset_root="dataset",
                         subset_name="subset0",
@@ -124,26 +156,54 @@ def build_training_set(xml_root="dataset/LIDC-XML-only",
                 continue  # ambiguous score=3, dropped per Option B
 
             try:
-                mask_native = rasterize_nodule_mask(nod["rois"], vol_hu.shape, spacing, origin)
-                if mask_native.sum() < 4:
+                # --- FIX: crop a small NATIVE-resolution subvolume around the
+                # nodule FIRST, then resample only that crop. The old version
+                # resampled the entire ~512x512x300 scan per nodule (30-90s
+                # each via scipy spline_filter1d) which is why it looked stuck.
+                z_positions = [r["z_position"] for r in nod["rois"] if r.get("z_position") is not None]
+                if not z_positions:
+                    skipped += 1
+                    continue
+                z_mm = float(np.mean(z_positions))
+                # rough centroid from first ROI's polygon, native pixel coords
+                pts = _get_polygon_points(nod["rois"][0])
+                xc_px = float(np.mean([p[0] for p in pts]))
+                yc_px = float(np.mean([p[1] for p in pts]))
+
+                sz, sy, sx = spacing
+                zc = int(round((z_mm - origin[2]) / sz))
+                yc = int(round(yc_px))  # ROI coords are already in this slice's pixel grid
+                xc = int(round(xc_px))
+
+                # native-resolution margin: ~40mm each side, converted to voxels per axis
+                mz = max(3, int(np.ceil(40.0 / sz)))
+                my = max(3, int(np.ceil(40.0 / sy)))
+                mx = max(3, int(np.ceil(40.0 / sx)))
+                z0n, z1n = max(0, zc - mz), min(vol_hu.shape[0], zc + mz)
+                y0n, y1n = max(0, yc - my), min(vol_hu.shape[1], yc + my)
+                x0n, x1n = max(0, xc - mx), min(vol_hu.shape[2], xc + mx)
+                if z1n <= z0n or y1n <= y0n or x1n <= x0n:
                     skipped += 1
                     continue
 
-                mask_iso, iso_spacing = resample_isotropic(
-                    mask_native.astype(np.float32), spacing,
-                    target_spacing=(1.0, 1.0, 1.0), is_mask=True
+                hu_crop_native = vol_hu[z0n:z1n, y0n:y1n, x0n:x1n]
+
+                # rasterize the mask directly into this small native crop's frame
+                mask_crop_native = rasterize_nodule_mask_local(
+                    nod["rois"], hu_crop_native.shape, spacing,
+                    origin_zyx_mm=(origin[2], origin[1], origin[0]),
+                    crop_offset_zyx_idx=(z0n, y0n, x0n)
                 )
-                mask_iso = (mask_iso > 0.5).astype(np.uint8)
+                if mask_crop_native.sum() < 4:
+                    skipped += 1
+                    continue
 
-                zc, yc, xc = np.array(np.where(mask_iso)).mean(axis=1).astype(int)
-                r = 24
-                z0, z1 = max(0, zc - r), min(mask_iso.shape[0], zc + r)
-                y0, y1 = max(0, yc - r), min(mask_iso.shape[1], yc + r)
-                x0, x1 = max(0, xc - r), min(mask_iso.shape[2], xc + r)
-                mask_patch = mask_iso[z0:z1, y0:y1, x0:x1]
-
-                vol_hu_iso, _ = resample_isotropic(vol_hu, spacing, target_spacing=(1.0, 1.0, 1.0))
-                hu_patch = vol_hu_iso[z0:z1, y0:y1, x0:x1]
+                # resample ONLY the small crop (fast — a few hundred voxels, not millions)
+                hu_patch, _ = resample_isotropic(hu_crop_native, spacing,
+                                                  target_spacing=(1.0, 1.0, 1.0), is_mask=False)
+                mask_patch, _ = resample_isotropic(mask_crop_native.astype(np.float32), spacing,
+                                                     target_spacing=(1.0, 1.0, 1.0), is_mask=True)
+                mask_patch = (mask_patch > 0.5).astype(np.uint8)
 
                 target_iso = (1.0, 1.0, 1.0)
                 volume_mm3 = calculate_volume(mask_patch, target_iso)
