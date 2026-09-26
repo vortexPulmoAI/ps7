@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pulmonary Nodule AI — Full Build Plan</title>
+<style>
+:root{
+  --bg:#f7f8fa; --card:#ffffff; --text:#1a1d23; --sub:#5b6270; --line:#e3e6eb;
+  --accent:#0b6e4f; --accent2:#0b4ea2; --warn:#b3540a; --code:#eef1f4;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14161a; --card:#1c1f25; --text:#e8eaed; --sub:#9aa2ae; --line:#2b2f37;
+    --accent:#3ddc97; --accent2:#6fa8ff; --warn:#ffb066; --code:#23272f;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14161a; --card:#1c1f25; --text:#e8eaed; --sub:#9aa2ae; --line:#2b2f37;
+  --accent:#3ddc97; --accent2:#6fa8ff; --warn:#ffb066; --code:#23272f;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+.wrap{max-width:940px;margin:0 auto;padding:28px 18px 80px;}
+h1{font-size:1.7rem;margin:0 0 6px;}
+h2{font-size:1.25rem;margin:38px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--accent);}
+h3{font-size:1.02rem;margin:20px 0 6px;color:var(--accent2);}
+p{color:var(--text);}
+.sub{color:var(--sub);margin:0 0 20px;}
+.badge{display:inline-block;background:var(--accent);color:#fff;font-size:.72rem;padding:2px 8px;border-radius:20px;margin-right:6px;}
+.badge-blue{display:inline-block;background:var(--accent2);color:#fff;font-size:.72rem;padding:2px 8px;border-radius:20px;margin-right:6px;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:10px 0;}
+table{width:100%;border-collapse:collapse;overflow-x:auto;display:block;}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;font-size:.86rem;vertical-align:top;}
+th{background:var(--code);}
+code{background:var(--code);padding:2px 6px;border-radius:4px;font-size:.85em;}
+pre{background:var(--code);padding:12px 14px;border-radius:8px;overflow-x:auto;font-size:.82rem;line-height:1.45;}
+a{color:var(--accent2);}
+ul{padding-left:20px;} li{margin:5px 0;}
+.step{display:flex;gap:10px;margin:8px 0;}
+.num{flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700;}
+.warn{border-left:3px solid var(--warn);padding-left:12px;color:var(--sub);margin:10px 0;}
+.note{border-left:3px solid var(--accent2);padding-left:12px;color:var(--sub);margin:10px 0;}
+nav{position:sticky;top:0;background:var(--bg);padding:10px 0;border-bottom:1px solid var(--line);z-index:5;overflow-x:auto;white-space:nowrap;margin-bottom:10px;}
+nav a{margin-right:14px;font-size:.82rem;text-decoration:none;color:var(--sub);font-weight:500;}
+nav a:hover{color:var(--accent2);}
+.math-box{background:var(--code);border-left:4px solid var(--accent);padding:12px 14px;border-radius:4px;margin:12px 0;font-family:"Courier New",Courier,monospace;font-size:.88rem;overflow-x:auto;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🫁 Pulmonary Nodule Detection → Segmentation → Malignancy Risk</h1>
+<p class="sub">Clinical-grade 3D thoracic CT analysis pipeline: spatial normalization → candidate proposal → sub-voxel boundary segmentation → quantitative morphology/density profiling → calibrated malignancy estimation.</p>
+<nav>
+<a href="#datasets">Datasets</a>
+<a href="#env">Environment</a>
+<a href="#stage0">Preprocess</a>
+<a href="#stage1">Detection</a>
+<a href="#stage2">Segmentation</a>
+<a href="#stage3">Morphology & Density</a>
+<a href="#stage4">Malignancy ML</a>
+<a href="#calibration">Calibration & Reporting</a>
+<a href="#eval">Evaluation</a>
+<a href="#checklist">Build Checklist</a>
+</nav>
+
+<h2 id="datasets">1. Datasets — Local Repository Grounding</h2>
+<div class="card">
+<h3>Local Repositories in <code>dataset/</code> (Ready & Grounded)</h3>
+<table>
+<tr><th>Dataset Component</th><th>Files / Directory</th><th>Dimensions / Count</th><th>Role in Pipeline</th></tr>
+<tr>
+  <td><b>LUNA16 Consensus Nodules</b></td>
+  <td><code>dataset/annotations.csv</code></td>
+  <td>1,186 consensus nodules (≥3 mm confirmed by ≥3/4 radiologists)</td>
+  <td>Ground truth for candidate detection and physical coordinates (X, Y, Z, diameter_mm).</td>
+</tr>
+<tr>
+  <td><b>LUNA16 Detection Candidates</b></td>
+  <td><code>dataset/candidates.csv</code></td>
+  <td>551,065 candidates (label 0: non-nodule false alarms, label 1: nodule)</td>
+  <td>Candidate proposal training and False Positive Reduction (FPR) classifier.</td>
+</tr>
+<tr>
+  <td><b>LIDC-IDRI XML Annotations</b></td>
+  <td><code>dataset/LIDC-XML-only/tcia-lidc-xml/</code></td>
+  <td>1,319 XML files across patient studies</td>
+  <td>Radiologist 3D polygon contours (<code>edgeMap</code>) and 8 semantic ratings + malignancy (1–5 scale).</td>
+</tr>
+<tr>
+  <td><b>LUNA16 Lung Masks</b></td>
+  <td><code>dataset/seg-lungs-LUNA16/</code></td>
+  <td>888 volumetric MHD/ZRAW series</td>
+  <td>Precomputed whole-lung segmentations to eliminate extrathoracic false positives.</td>
+</tr>
+</table>
+
+<h3>External Secondary Validation Cohorts</h3>
+<table>
+<tr><th>Dataset</th><th>Utility</th><th>Source</th></tr>
+<tr><td>NLST</td><td>Longitudinal biopsy-proven cancer outcomes — external calibration & clinical validation</td><td>National Cancer Institute (CDAS)</td></tr>
+<tr><td>LNDb</td><td>Candidate proposal evaluation on retrospective clinical scans & thick slices</td><td>Grand Challenge LNDb</td></tr>
+<tr><td>DLCS</td><td>Screening benchmark across solid, subsolid, and calcified nodules</td><td>Duke TCIA Archive</td></tr>
+</table>
+</div>
+
+<h2 id="env">2. Environment Setup</h2>
+<div class="card">
+<pre>python -m venv nodule-env && source nodule-env/bin/activate
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install monai[all] SimpleITK pydicom torchio
+pip install pyradiomics vtk scikit-image
+pip install xgboost lightgbm scikit-learn pandas numpy matplotlib scipy
+pip install highdicom nibabel
+pip install TotalSegmentator
+git clone https://github.com/MIC-DKFZ/nnDetection.git
+git clone https://github.com/MIC-DKFZ/nnUNet.git</pre>
+<p class="sub">Hardware target: 16 GB+ VRAM GPU recommended for full 3D nnDetection and nnU-Net volumetric convolution training.</p>
+</div>
+
+<h2 id="stage0">3. Preprocessing & Spatial Normalization (Implemented in <code>src/preprocessing.py</code>)</h2>
+<div class="step"><div class="num">1</div><p><b>Coordinate Affine Transformation Matrix (T_world):</b> Map discrete array indices <code>(i, j, k)</code> to physical Patient Coordinates <code>(X, Y, Z)</code> in millimeters using <code>ImagePositionPatient</code> and <code>ImageOrientationPatient</code> cosines.</p></div>
+<div class="math-box">
+T_world = [ [R11 * sx,  R12 * sy,  R13 * sz,  Tx],
+            [R21 * sx,  R22 * sy,  R23 * sz,  Ty],
+            [R31 * sx,  R32 * sy,  R33 * sz,  Tz],
+            [0,         0,         0,         1 ] ]
+</div>
+<div class="step"><div class="num">2</div><p><b>Isotropic Resampling:</b> Resample continuous attenuation volumes to <code>1.0 × 1.0 × 1.0 mm³</code> using 3rd-order spline interpolation. Use nearest-neighbor interpolation for binary masks to prevent boundary contamination.</p></div>
+<div class="step"><div class="num">3</div><p><b>Radiometric Windowing (HU):</b>
+<br/>• <i>Lung Screening Window:</i> [-1000 HU, +400 HU] (or WL: -600, WW: 1500 -> [-1350, +150 HU])
+<br/>• <i>Soft Tissue / Mediastinal:</i> [-160 HU, +240 HU] (WL: +40, WW: 400 HU)
+<br/>Scale linearly to [0.0, 1.0] or standardize via z-score.</p></div>
+<div class="step"><div class="num">4</div><p><b>Parenchyma Parcellation:</b> Mask out extrathoracic structures using TotalSegmentator or LUNA16 precomputed lung masks (<code>load_mhd_mask()</code>).</p></div>
+
+<h2 id="stage1">4. Stage 1 — 3D Candidate Detection & FPR (Wrapped in <code>src/detection.py</code>)</h2>
+<div class="card">
+<p class="warn"><b>Engineering Note:</b> <code>src/detection.py</code> provides the data prep, bounding-box coordinate transformations, dual-scale patch extraction, and FROC/CPM metric calculation. Model training on GPU runs subsequently.</p>
+<div class="step"><div class="num">1</div><p><b>nnDetection Data Prep:</b> Convert <code>annotations.csv</code> (world coords + diameter) into 3D bounding boxes <code>[xmin, ymin, zmin, xmax, ymax, zmax]</code> and compile <code>dataset.json</code>.</p></div>
+<div class="step"><div class="num">2</div><p><b>Retina U-Net Detector:</b> Train 3D FPN with anisotropic ResNet backbone using Focal Loss (γ = 2.0) across LUNA16's 10-fold split.</p></div>
+<div class="step"><div class="num">3</div><p><b>False-Positive Reduction (FPR):</b> Extract dual-scale 3D patches centered on candidates:
+<br/>• Internal patch (32³ mm): margin sharpness and internal attenuation
+<br/>• Contextual patch (64³ mm): relation to bronchi, vessels, and pleura
+<br/>Train a 3D DenseNet with Online Hard Negative Mining (OHEM) to reduce false alarms to &lt;1.0 FP/scan at &gt;95% sensitivity.</p></div>
+<div class="step"><div class="num">4</div><p><b>FROC / CPM Evaluation:</b> Calculate Competitive Performance Metric (CPM) = average sensitivity at {⅛, ¼, ½, 1, 2, 4, 8} FP/scan. Target CPM ≥ 0.90.</p></div>
+</div>
+
+<h2 id="stage2">5. Stage 2 — Volumetric Segmentation (Wrapped in <code>src/segmentation.py</code>)</h2>
+<div class="card">
+<div class="step"><div class="num">1</div><p><b>Rasterize Radiologist Contours:</b> Parse polygon edge maps (<code>xCoord, yCoord</code> across z-slices) from <code>dataset/LIDC-XML-only</code> and rasterize into 3D binary ground-truth masks.</p></div>
+<div class="step"><div class="num">2</div><p><b>3D nnU-Net v2 Dataset Compilation:</b> Structure sub-volume crops into <code>Dataset101_LIDC_Nodules</code> with <code>imagesTr</code> and <code>labelsTr</code>.</p></div>
+<div class="step"><div class="num">3</div><p><b>Segmentation Loss:</b> Compound Soft Dice + Binary Cross-Entropy (BCE) Loss.</p></div>
+<div class="step"><div class="num">4</div><p><b>Spatial Metrics:</b> Evaluate on test splits using Dice Similarity Coefficient (DSC target: 0.82–0.86) and 95th-Percentile Hausdorff Distance (HD95) in mm.</p></div>
+</div>
+
+<h2 id="stage3">6. Stage 3 — Morphology & Density Feature Extraction (Implemented in <code>src/morphology.py</code> & <code>src/density.py</code>)</h2>
+<div class="card">
+<div class="step"><div class="num">1</div><p><b>Physical Volumetry:</b> V = (Σ active mask voxels) × (sx · sy · sz) mm³.</p></div>
+<div class="step"><div class="num">2</div><p><b>Second-Moment Inertia Tensor:</b> Diagonalize covariance tensor across mask voxels to extract orthogonal principal axes (λ1 ≥ λ2 ≥ λ3). Project onto maximal transverse slice to determine long-axis diameter (d_long), short-axis diameter (d_short), and mean diameter d_mean = (d_long + d_short) / 2.</p></div>
+<div class="step"><div class="num">3</div><p><b>3D Sphericity (Ψ):</b> Marching cubes isosurface triangulation to measure true surface area A_surface:
+<div class="math-box">Ψ = (π^(1/3) * (6 * V)^(2/3)) / A_surface</div>
+Smooth granulomas approach Ψ → 1.0; invasive lesions exhibit lower sphericity.</p></div>
+<div class="step"><div class="num">4</div><p><b>Spiculation Index:</b> Normalized radial distance variance (σ_R² / μ_R²) and mesh boundary curvature.</p></div>
+<div class="step"><div class="num">5</div><p><b>4-Tier Attenuation Decomposition:</b>
+<br/>• Air / Entrapment: &lt; -750 HU
+<br/>• Ground-Glass Opacity (GGO): [-750, -300 HU]
+<br/>• Solid Component: &gt; -300 HU (Solid core: ≥ -160 HU)
+<br/>• Macrocalcification: &gt; +200 HU
+<br/>Classify subtype: Pure GGN (&lt;10% solid), Part-Solid (10–80% solid), Solid (&gt;80% solid), or Calcified.</p></div>
+</div>
+
+<h2 id="stage4">7. Stage 4 — Malignancy Risk Classification (Ground Truth Labeling)</h2>
+<div class="card">
+<h3>LIDC-IDRI Ground Truth Label Scheme (Option B Benchmark Standard)</h3>
+<ul>
+<li>Malignancy rating rated independently by up to 4 radiologists on 1–5 scale.</li>
+<li><b>Label 0 (Benign):</b> Mean radiologist score 1.0 – 2.0.</li>
+<li><b>Label 1 (Malignant):</b> Mean radiologist score 4.0 – 5.0.</li>
+<li><b>Drop Score = 3 (Indeterminate):</b> Excluded from training set (reflects genuine clinical ambiguity, standard in literature).</li>
+<li><b>Auxiliary Radiologist Semantics:</b> 8 semantic attributes (subtlety, calcification, sphericity, margin, lobulation, spiculation, texture) used as auxiliary tabular features alongside IBSI PyRadiomics.</li>
+</ul>
+</div>
+
+<h2 id="calibration">8. Probability Calibration & Clinical Triad Reporting Format</h2>
+<div class="card">
+<h3>Why Raw Classifier Output Fails in Clinic</h3>
+<p>Standard tree-based classifiers (XGBoost/LightGBM) optimize ranking (AUROC), but their raw <code>predict_proba()</code> output is heavily miscalibrated. A raw score of 0.70 does not mean 70% of such lesions are malignant. <b>Post-hoc calibration is mandatory:</b></p>
+<ul>
+<li><b>Platt Scaling (Sigmoid):</b> Fits a logistic regression transform over classifier margins. Optimal for small/moderate validation sets ($N < 1000$).</li>
+<li><b>Isotonic Regression:</b> Non-parametric monotonic stepwise fit. Best for large cohorts ($N > 1000$).</li>
+<li>Use <code>sklearn.calibration.CalibratedClassifierCV(method='sigmoid', cv=5)</code> and evaluate with Brier score:
+<div class="math-box">Brier = (1/N) * Σ (p_i - y_i)²</div>
+</li>
+</ul>
+
+<h3>The Full Brock (PanCan / McWilliams 2013) Mathematical Formulation</h3>
+<p>Screening reference multivariable fractional polynomial logistic regression model:</p>
+<div class="math-box">
+p_brock = 1 / (1 + exp(-X))
+
+X = -6.7892
+    + 0.0287 * (Age - 62)
+    + 0.6011 * I_Female
+    + 0.2961 * I_FamilyHistory
+    + 0.2953 * I_Emphysema
+    - 5.3854 * [ (d_max / 10)^(-0.5) - 1.58113883 ]
+    + beta_attenuation
+    + 0.6581 * I_UpperLobe
+    - 0.0824 * (NoduleCount - 4)
+    + 0.7729 * I_Spiculation
+
+Weights (beta_attenuation): Solid = 0.0, Part-Solid = +0.3770, Pure GGN = -0.1276
+</div>
+<p class="note"><b>Clinical Threshold:</b> British Thoracic Society (BTS) recommends Brock score ≥ 10% be directed to FDG-PET/CT or biopsy; &lt;10% remains under surveillance.</p>
+
+<h3>ACR Lung-RADS Version 2022 Decision Table</h3>
+<table>
+<tr><th>Category</th><th>Risk Tier</th><th>Solid Criteria</th><th>Part-Solid Criteria</th><th>Pure GGN Criteria</th><th>Clinical Action</th></tr>
+<tr>
+  <td><b>Category 2</b></td>
+  <td>&lt;1%</td>
+  <td>&lt;6 mm baseline</td>
+  <td>&lt;6 mm total diameter</td>
+  <td>&lt;30 mm baseline</td>
+  <td>Annual LDCT in 12 months</td>
+</tr>
+<tr>
+  <td><b>Category 3</b></td>
+  <td>1–2%</td>
+  <td>6 to &lt;8 mm</td>
+  <td>≥6 mm total, solid core &lt;6 mm</td>
+  <td>≥30 mm baseline</td>
+  <td>6-month LDCT follow-up</td>
+</tr>
+<tr>
+  <td><b>Category 4A</b></td>
+  <td>5–15%</td>
+  <td>8 to &lt;15 mm</td>
+  <td>Solid core 6 to &lt;8 mm</td>
+  <td>—</td>
+  <td>3-month LDCT; PET/CT if solid core ≥8 mm</td>
+</tr>
+<tr>
+  <td><b>Category 4B</b></td>
+  <td>&gt;15%</td>
+  <td>≥15 mm</td>
+  <td>Solid core ≥8 mm</td>
+  <td>—</td>
+  <td>Diagnostic CT, PET/CT, and/or biopsy</td>
+</tr>
+<tr>
+  <td><b>Category 4X</b></td>
+  <td>&gt;15% (often &gt;50%)</td>
+  <td colspan="3">Category 3 or 4 nodule displaying marked spiculation or adenopathy</td>
+  <td>Diagnostic CT, PET/CT, and/or biopsy</td>
+</tr>
+</table>
+
+<h3>Clinical Triad Output Interface (Implemented in <code>src/risk_engine.py</code>)</h3>
+<pre>def assess_risk(nodule_features: dict) -> dict:
+    return {
+        "risk_percent": 73.2,                 # Calibrated ML model probability (0-100%)
+        "brock_percent": 68.5,                # PanCan/Brock reference formula
+        "lung_rads_category": "4A",           # ACR clinical risk tier
+        "lung_rads_action": "3-month LDCT; PET/CT if solid core >= 8 mm",
+        "confidence_flag": "model/brock agree" # or "diverge -- clinical review required"
+    }</pre>
+</div>
+
+<h2 id="eval">9. Evaluation Targets</h2>
+<table>
+<tr><th>Diagnostic Stage</th><th>Target Metric</th><th>Benchmark Threshold</th></tr>
+<tr><td>3D Candidate Detection</td><td>CPM (FROC on LUNA16)</td><td>≥ 0.90</td></tr>
+<tr><td>False Positive Reduction</td><td>FP/scan @ Sensitivity</td><td>&lt;1.0 FP/scan @ &gt;95% sensitivity</td></tr>
+<tr><td>Volumetric Segmentation</td><td>Dice Similarity Coefficient / HD95</td><td>DSC 0.82–0.86 / HD95 &lt; 3.0 mm</td></tr>
+<tr><td>Malignancy Risk Model</td><td>AUROC / Brier Score</td><td>AUROC 0.90–0.94 / Brier &lt; 0.10</td></tr>
+</table>
+
+<h2 id="checklist">10. Build-Order Checklist & Project Status</h2>
+<div class="card">
+<ul>
+<li><span class="badge">DONE</span> <b>Local Dataset Grounding:</b> Verified <code>annotations.csv</code> (1,186 nodules), <code>candidates.csv</code> (551,065 candidates), <code>LIDC-XML-only</code> (1,319 XMLs), and <code>seg-lungs-LUNA16</code>.</li>
+<li><span class="badge">DONE</span> <b>Preprocessing Engine (<code>src/preprocessing.py</code>):</b> Implemented <code>AffineTransform</code> (T_world), <code>resample_isotropic()</code>, <code>apply_hu_window()</code>, and <code>load_mhd_mask()</code>.</li>
+<li><span class="badge">DONE</span> <b>Quantitative Morphology (<code>src/morphology.py</code>):</b> Implemented physical volume, second-moment inertia tensor axes (d_long, d_short, d_mean), marching cubes sphericity (Ψ), and spiculation radial variance.</li>
+<li><span class="badge">DONE</span> <b>Hounsfield Density Profiling (<code>src/density.py</code>):</b> Implemented 4-tier attenuation breakdown and nodule subtype classification (Pure GGN, Part-Solid, Solid, Calcified).</li>
+<li><span class="badge">DONE</span> <b>Real Dataset Parsers (<code>src/dataset_parser.py</code>):</b> Implemented parsers for LUNA16 annotations/candidates, LIDC XML contours & Option B label extraction, and lung masks.</li>
+<li><span class="badge">DONE</span> <b>Detection & Segmentation Wrappers (<code>src/detection.py</code>, <code>src/segmentation.py</code>):</b> Implemented nnDetection bounding box generator, candidate patch extractors (32³ and 64³ mm), nnU-Net polygon-to-mask rasterizer, and FROC/CPM & Dice/HD95 evaluators.</li>
+<li><span class="badge">DONE</span> <b>Deterministic Clinical Calculators (<code>src/risk_engine.py</code>):</b> Implemented <code>BrockCalculator</code> (full PanCan formula) and <code>LungRADSClassifier</code> (ACR Lung-RADS v2022 decision table).</li>
+<li><span class="badge">DONE</span> <b>Comprehensive Automated Tests:</b> 25 passing unit and integration tests in <code>tests/</code> verifying all math, geometry, and real dataset parsing.</li>
+<li><span class="badge">DONE</span> <b>End-to-End Pipeline Demonstration:</b> <code>demo_pipeline.py</code> ingesting real dataset entries, workspace CT slice <code>124.raw</code>, and generating the clinical triad report.</li>
+<li style="margin-top:10px;"><span class="badge-blue">NEXT</span> <b>nnDetection Model Training:</b> Execute 3D Retina U-Net training on GPU using generated LUNA16 task structure.</li>
+<li><span class="badge-blue">NEXT</span> <b>nnU-Net Segmentation Training:</b> Train 3D nnU-Net on compiled LIDC radiologist contour masks.</li>
+<li><span class="badge-blue">NEXT</span> <b>PyRadiomics Feature Extraction:</b> Extract IBSI shape and texture features from trained segmented masks.</li>
+<li><span class="badge-blue">NEXT</span> <b>Calibrated ML Model (<code>CalibratedMalignancyModel</code>):</b> Train XGBoost/LightGBM on Option B labels and calibrate via Platt scaling (`CalibratedClassifierCV`).</li>
+<li><span class="badge-blue">NEXT</span> <b>Clinical Export:</b> DICOM SEG & DICOM Structured Reporting (TID 1500) PACS serialization via <code>highdicom</code>.</li>
+</ul>
+</div>
+<p class="sub">Clinical software must be built from sound mathematical and volumetric foundations before model calibration and PACS export.</p>
+</div>
+</body>
+</html>

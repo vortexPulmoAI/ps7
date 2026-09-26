@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Raw CT Imaging & Heavy Data (LUNA16 / LIDC Scans)
+# Exclude raw multi-gigabyte medical volumes and masks from Git
+*.raw
+*.mhd
+*.zraw
+dataset/subset*
+dataset/seg-lungs-LUNA16/
+dataset/processed_patches/
+dataset/LIDC-XML-only/
+dataset/candidates.csv
+
+# Temporary test files in root
+1.raw
+124.raw
+1.png
+124.png
+124_windows.png
+plan/*.pdf
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
