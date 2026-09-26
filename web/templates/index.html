@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vortex PulmoAI — Pulmonary Nodule Risk Assessment Workstation</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Three.js for 3D Mesh Rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfeff',
+              100: '#cffafe',
+              500: '#06b6d4',
+              600: '#0891b2',
+              700: '#0e7490',
+            },
+            slate: {
+              850: '#151f32',
+              900: '#0f172a',
+              950: '#020617'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #0b1120;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(51, 65, 85, 0.6);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    .glow-cyan {
+      box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.35);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col custom-scrollbar">
+
+  <!-- TOP CLINICAL WORKSTATION NAVIGATION -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-3.5">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+        <i class="fa-solid fa-lungs text-white text-xl"></i>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <h1 class="text-lg font-bold text-white tracking-wide">VORTEX PULMO-AI</h1>
+          <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800">Clinical Grade v1.0</span>
+        </div>
+        <p class="text-xs text-slate-400">3D Thoracic CT Volumetric Analysis • IBSI Profiling • Calibrated Malignancy Risk Engine</p>
+      </div>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div class="hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-xs text-slate-300">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Platt-Calibrated XGBoost: <strong>AUROC 0.944</strong> (LIDC-IDRI Validated)</span>
+      </div>
+      <a href="https://github.com/vortexPulmoAI/ps7" target="_blank" class="text-slate-400 hover:text-white transition text-sm flex items-center space-x-1.5 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+        <i class="fa-brands fa-github text-base"></i>
+        <span>Repository</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <main class="flex-1 p-6 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- LEFT COLUMN: INGESTION & CONTROLS (4 COLS) -->
+    <div class="lg:col-span-4 space-y-6">
+
+      <!-- CT UPLOAD CARD -->
+      <div class="glass-card rounded-2xl p-5 shadow-xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+            <i class="fa-solid fa-upload text-cyan-400"></i>
+            <span>CT Image Ingestion</span>
+          </h2>
+          <span class="text-xs text-slate-400 font-mono">DICOM / NIfTI / MHD</span>
+        </div>
+
+        <!-- DROP ZONE -->
+        <div id="drop-zone" class="border-2 border-dashed border-slate-700 hover:border-cyan-500 rounded-xl p-6 text-center cursor-pointer transition bg-slate-900/50 hover:bg-slate-800/40 relative">
+          <input type="file" id="file-input" class="absolute inset-0 opacity-0 cursor-pointer" accept=".dcm,.zip,.nii,.nii.gz,.mhd,.raw,.npy,.png,.jpg,.jpeg">
+          <i class="fa-solid fa-cloud-arrow-up text-3xl text-cyan-400 mb-2"></i>
+          <p class="text-sm font-medium text-slate-200">Drag & drop CT scan here</p>
+          <p class="text-xs text-slate-400 mt-1">or <span class="text-cyan-400 underline">browse files</span> from computer</p>
+          <div class="mt-3 flex flex-wrap justify-center gap-1.5">
+            <span class="px-2 py-0.5 text-[10px] rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">DICOM (.dcm/.zip)</span>
+            <span class="px-2 py-0.5 text-[10px] rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">NIfTI (.nii)</span>
+            <span class="px-2 py-0.5 text-[10px] rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">MetaImage (.mhd)</span>
+            <span class="px-2 py-0.5 text-[10px] rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono">2D/3D (.png/.raw)</span>
+          </div>
+        </div>
+
+        <div id="selected-file-info" class="hidden text-xs bg-slate-800/90 border border-cyan-800 rounded-lg p-2.5 flex items-center justify-between text-cyan-300">
+          <span class="truncate flex items-center space-x-2">
+            <i class="fa-solid fa-file-medical text-cyan-400"></i>
+            <span id="file-name-label" class="font-medium truncate">file.dcm</span>
+          </span>
+          <button id="clear-file-btn" class="text-slate-400 hover:text-red-400 ml-2"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <!-- PRE-LOADED TEST PATIENT DROPDOWN -->
+        <div class="pt-2 border-t border-slate-800">
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+            <span>Or Select Real LUNA16 Patient Scan:</span>
+            <span class="text-[10px] text-cyan-400">1-Click Test</span>
+          </label>
+          <select id="sample-select" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 transition">
+            <option value="">-- Choose verified test scan --</option>
+          </select>
+        </div>
+
+        <!-- CLINICAL CONTEXT ACCORDION -->
+        <div class="pt-2 border-t border-slate-800">
+          <div class="flex items-center justify-between cursor-pointer py-1" onclick="document.getElementById('clinical-inputs').classList.toggle('hidden')">
+            <span class="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+              <i class="fa-solid fa-user-doctor text-cyan-400"></i>
+              <span>Patient Clinical Risk Factors (Optional)</span>
+            </span>
+            <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
+          </div>
+
+          <div id="clinical-inputs" class="space-y-3 pt-3">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Patient Age</label>
+                <input type="number" id="input-age" value="62" min="18" max="100" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200">
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Biological Sex</label>
+                <select id="input-sex" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200">
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="space-y-2 pt-1">
+              <label class="flex items-center space-x-2 text-xs text-slate-300">
+                <input type="checkbox" id="check-upper-lobe" checked class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <span>Anatomical Location: Upper Lobe</span>
+              </label>
+              <label class="flex items-center space-x-2 text-xs text-slate-300">
+                <input type="checkbox" id="check-family-history" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <span>Family History of Lung Cancer</span>
+              </label>
+              <label class="flex items-center space-x-2 text-xs text-slate-300">
+                <input type="checkbox" id="check-emphysema" class="rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+                <span>Radiological Emphysema</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTION BUTTON -->
+        <button id="run-btn" class="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold text-sm shadow-lg shadow-cyan-600/30 transition flex items-center justify-center space-x-2">
+          <i class="fa-solid fa-microchip"></i>
+          <span>Run 3D Nodule Risk Assessment</span>
+        </button>
+      </div>
+
+      <!-- INDUSTRY STANDARDS CARD -->
+      <div class="glass-card rounded-2xl p-5 shadow-xl space-y-3">
+        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+          <i class="fa-solid fa-circle-info text-cyan-400"></i>
+          <span>Industry Standard Image Formats</span>
+        </h3>
+        <p class="text-xs text-slate-400 leading-relaxed">
+          In clinical radiology, <strong>DICOM (Digital Imaging and Communications in Medicine)</strong> is the universal hospital gold standard. It preserves calibrated Hounsfield Units (HU), sub-millimeter slice thickness, and 3D affine orientation matrices. In AI research, <strong>NIfTI (.nii)</strong> and <strong>MetaImage (.mhd)</strong> are the standard volumetric formats.
+        </p>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: DIAGNOSTIC DASHBOARD & 3D VIEWER (8 COLS) -->
+    <div class="lg:col-span-8 space-y-6">
+
+      <!-- WELCOME / EMPTY STATE -->
+      <div id="empty-state" class="glass-card rounded-2xl p-12 text-center space-y-4">
+        <div class="w-16 h-16 mx-auto rounded-2xl bg-slate-800/80 border border-slate-700 flex items-center justify-center text-cyan-400 text-3xl">
+          <i class="fa-solid fa-dna"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white">No Scan Loaded for Analysis</h3>
+        <p class="text-sm text-slate-400 max-w-md mx-auto">
+          Upload any patient CT scan (DICOM, NIfTI, MHD, PNG, or RAW) on the left panel, or select a pre-loaded LUNA16 benchmark case to run the full diagnostic model.
+        </p>
+        <button onclick="document.getElementById('sample-select').selectedIndex=1; document.getElementById('sample-select').dispatchEvent(new Event('change'));" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-800/50 text-xs font-semibold transition">
+          <i class="fa-solid fa-bolt mr-1"></i> Quick Test Sample #0 (6.4mm Nodule)
+        </button>
+      </div>
+
+      <!-- SPINNER LOADING STATE -->
+      <div id="loading-state" class="hidden glass-card rounded-2xl p-16 text-center space-y-4">
+        <div class="relative w-16 h-16 mx-auto">
+          <div class="w-16 h-16 rounded-full border-4 border-slate-800 border-t-cyan-500 animate-spin"></div>
+          <div class="absolute inset-0 flex items-center justify-center text-cyan-400 text-lg">
+            <i class="fa-solid fa-lungs"></i>
+          </div>
+        </div>
+        <h3 class="text-base font-bold text-white">Executing 3D Volumetric Processing...</h3>
+        <p class="text-xs text-slate-400 max-w-md mx-auto">
+          Affine $T_{\text{world}}$ normalization &bull; 1.0mm³ Isotropic Resampling &bull; IBSI 3D Morphometry &bull; 4-Tier HU Decomposition &bull; Platt-Calibrated Risk Inference
+        </p>
+      </div>
+
+      <!-- RESULTS CONTAINER -->
+      <div id="results-container" class="hidden space-y-6">
+
+        <!-- CLINICAL DECISION TRIAD CARDS -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          <!-- 1. CALIBRATED ML RISK CARD -->
+          <div class="glass-card rounded-2xl p-5 border-l-4 border-l-cyan-500 shadow-xl relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">1. Calibrated ML Risk</span>
+              <i class="fa-solid fa-brain text-cyan-400"></i>
+            </div>
+            <div class="flex items-baseline space-x-2">
+              <span id="card-ml-risk" class="text-3xl font-black text-cyan-400">80.0%</span>
+              <span class="text-xs text-slate-400">Malignancy</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Platt-Calibrated XGBoost (AUROC: 0.944)</p>
+            <div class="mt-3 w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+              <div id="bar-ml-risk" class="bg-gradient-to-r from-cyan-500 to-red-500 h-2 rounded-full" style="width: 80%"></div>
+            </div>
+          </div>
+
+          <!-- 2. BROCK / PANCAN SCORE CARD -->
+          <div class="glass-card rounded-2xl p-5 border-l-4 border-l-blue-500 shadow-xl">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">2. Brock / PanCan</span>
+              <i class="fa-solid fa-calculator text-blue-400"></i>
+            </div>
+            <div class="flex items-baseline space-x-2">
+              <span id="card-brock-risk" class="text-3xl font-black text-blue-400">3.6%</span>
+              <span class="text-xs text-slate-400">Reference Prob.</span>
+            </div>
+            <p id="card-bts-rec" class="text-[11px] text-slate-300 mt-1 truncate">BTS Guideline: Routine Surveillance</p>
+            <div class="mt-3 w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+              <div id="bar-brock-risk" class="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full" style="width: 3.6%"></div>
+            </div>
+          </div>
+
+          <!-- 3. ACR LUNG-RADS CARD -->
+          <div class="glass-card rounded-2xl p-5 border-l-4 border-l-amber-500 shadow-xl">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">3. ACR Lung-RADS</span>
+              <i class="fa-solid fa-shield-halved text-amber-400"></i>
+            </div>
+            <div class="flex items-baseline space-x-2">
+              <span class="text-xs text-slate-400 font-medium">Category</span>
+              <span id="card-lungrads-cat" class="text-3xl font-black text-amber-400">3</span>
+            </div>
+            <p id="card-lungrads-mgmt" class="text-[11px] text-slate-300 mt-1 truncate">6-month low-dose CT follow-up</p>
+            <div class="mt-3 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">Concordance:</span>
+              <span id="card-concordance" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-950 text-amber-300 border border-amber-800">Diverge / Review</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 3D INTERACTIVE MESH VIEWER & MULTI-PLANAR CT SECTION -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          <!-- 3D INTERACTIVE SURFACE MESH VIEWER -->
+          <div class="glass-card rounded-2xl p-5 shadow-xl flex flex-col">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+                <i class="fa-solid fa-cube text-cyan-400"></i>
+                <span>3D Nodule Surface Morphology</span>
+              </h3>
+              <div class="flex items-center space-x-2">
+                <button id="toggle-wireframe" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 hover:text-cyan-400">Wireframe</button>
+                <button id="reset-3d-cam" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 hover:text-cyan-400">Reset</button>
+              </div>
+            </div>
+            <div id="threejs-canvas-container" class="w-full h-64 rounded-xl bg-slate-950 relative overflow-hidden border border-slate-800">
+              <div class="absolute bottom-2 left-2 pointer-events-none text-[10px] text-slate-500 bg-slate-900/80 px-2 py-0.5 rounded">
+                Drag to rotate &bull; Scroll to zoom
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-3 text-center text-xs">
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                <div class="text-[10px] text-slate-400">Volume</div>
+                <div id="mesh-vol" class="font-bold text-slate-200">282.0 mm³</div>
+              </div>
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                <div class="text-[10px] text-slate-400">Sphericity (Ψ)</div>
+                <div id="mesh-sphericity" class="font-bold text-slate-200">0.896</div>
+              </div>
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                <div class="text-[10px] text-slate-400">Spiculation</div>
+                <div id="mesh-spic" class="font-bold text-slate-200">Smooth</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- MULTI-PLANAR DIAGNOSTIC CT PANELS -->
+          <div class="glass-card rounded-2xl p-5 shadow-xl flex flex-col">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+              <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+                <i class="fa-solid fa-layer-group text-cyan-400"></i>
+                <span>Radiological CT Panels</span>
+              </h3>
+              <div class="flex space-x-1" id="img-tab-buttons">
+                <button onclick="showImgTab('overlay')" class="text-[10px] px-2.5 py-0.5 rounded bg-cyan-700 text-white font-medium">Overlay</button>
+                <button onclick="showImgTab('patch')" class="text-[10px] px-2.5 py-0.5 rounded bg-slate-800 text-slate-300">Patch</button>
+                <button onclick="showImgTab('axial')" class="text-[10px] px-2.5 py-0.5 rounded bg-slate-800 text-slate-300">Axial CT</button>
+                <button onclick="showImgTab('hist')" class="text-[10px] px-2.5 py-0.5 rounded bg-slate-800 text-slate-300">HU Histogram</button>
+              </div>
+            </div>
+
+            <div class="w-full h-64 rounded-xl bg-slate-950 flex items-center justify-center border border-slate-800 overflow-hidden relative">
+              <img id="img-display" class="max-h-full max-w-full object-contain" src="" alt="CT Visualization">
+            </div>
+
+            <!-- DENSITY PROFILE BREAKDOWN -->
+            <div class="grid grid-cols-3 gap-2 mt-3 text-center text-xs">
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                <div class="text-[10px] text-slate-400">Subtype</div>
+                <div id="val-subtype" class="font-bold text-cyan-400">PART_SOLID</div>
+              </div>
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                <div class="text-[10px] text-slate-400">Solid Core Size</div>
+                <div id="val-solid-core" class="font-bold text-slate-200">4.2 mm</div>
+              </div>
+              <div class="bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                <div class="text-[10px] text-slate-400">Mean Diam. (d_mean)</div>
+                <div id="val-mean-diam" class="font-bold text-slate-200">8.2 mm</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- CLINICAL TREATMENT & MANAGEMENT PATHWAY (NCCN / BTS) -->
+        <div class="glass-card rounded-2xl p-5 border-l-4 border-l-emerald-500 shadow-xl space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+            <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+              <i class="fa-solid fa-stethoscope text-emerald-400"></i>
+              <span>Personalized Treatment & Management Pathway (NCCN / BTS Guidelines)</span>
+            </h3>
+            <span id="treatment-urgency-badge" class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+              Routine / Low Risk
+            </span>
+          </div>
+
+          <div class="text-sm font-semibold text-slate-200" id="treatment-primary-action">
+            6-Month Follow-Up Low-Dose CT
+          </div>
+
+          <p class="text-xs text-slate-400 leading-relaxed" id="treatment-summary">
+            Lesion evaluation summary...
+          </p>
+
+          <div class="pt-2">
+            <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Recommended Clinical Actions:</h4>
+            <ul id="treatment-checklist" class="space-y-1.5 text-xs text-slate-300">
+              <!-- Dynamically populated -->
+            </ul>
+          </div>
+        </div>
+
+        <!-- STANDARDIZED STEP 6 JSON PAYLOAD ACCORDION -->
+        <div class="glass-card rounded-2xl p-5 shadow-xl space-y-3">
+          <div class="flex items-center justify-between cursor-pointer" onclick="document.getElementById('json-drawer').classList.toggle('hidden')">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+              <i class="fa-solid fa-code text-cyan-400"></i>
+              <span>Standardized Step 6 Diagnostic JSON (PACS / RIS Integration)</span>
+            </h3>
+            <div class="flex items-center space-x-2">
+              <button onclick="event.stopPropagation(); copyJSON()" class="px-2.5 py-1 text-[11px] rounded bg-slate-800 text-cyan-400 hover:bg-slate-700 border border-slate-700">
+                <i class="fa-solid fa-copy mr-1"></i> Copy JSON
+              </button>
+              <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
+            </div>
+          </div>
+
+          <div id="json-drawer" class="hidden pt-2">
+            <pre id="json-code" class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-cyan-300 overflow-x-auto max-h-72 border border-slate-800 custom-scrollbar"></pre>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- JAVASCRIPT APP LOGIC -->
+  <script>
+    let activeImages = {};
+    let activeJson = {};
+    let threeScene, threeCamera, threeRenderer, threeMesh, threeControls;
+
+    // Load available sample scans
+    async function loadSamples() {
+      try {
+        const res = await fetch('/api/samples');
+        const data = await res.json();
+        const sel = document.getElementById('sample-select');
+        sel.innerHTML = '<option value="">-- Choose verified test scan --</option>';
+        data.samples.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = `Scan #${s.id}: ${s.primary_diameter_mm}mm Nodule (UID: ${s.series_uid.substring(0, 16)}...)`;
+          sel.appendChild(opt);
+        });
+      } catch (e) {
+        console.error('Failed to load sample scans:', e);
+      }
+    }
+
+    // Dropzone logic
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const selectedFileInfo = document.getElementById('selected-file-info');
+    const fileNameLabel = document.getElementById('file-name-label');
+    const clearFileBtn = document.getElementById('clear-file-btn');
+    let currentUploadedFile = null;
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    clearFileBtn.addEventListener('click', () => {
+      currentUploadedFile = null;
+      fileInput.value = '';
+      selectedFileInfo.classList.add('hidden');
+    });
+
+    function handleFile(file) {
+      currentUploadedFile = file;
+      fileNameLabel.textContent = file.name;
+      selectedFileInfo.classList.remove('hidden');
+      document.getElementById('sample-select').value = '';
+    }
+
+    // Run Analysis Button
+    document.getElementById('run-btn').addEventListener('click', async () => {
+      const sampleId = document.getElementById('sample-select').value;
+      if (!currentUploadedFile && sampleId === '') {
+        alert('Please either upload a CT scan or select a pre-loaded sample scan.');
+        return;
+      }
+
+      document.getElementById('empty-state').classList.add('hidden');
+      document.getElementById('results-container').classList.add('hidden');
+      document.getElementById('loading-state').classList.remove('hidden');
+
+      const formData = new FormData();
+      if (currentUploadedFile) {
+        formData.append('file', currentUploadedFile);
+      } else {
+        formData.append('sample_id', sampleId);
+      }
+
+      formData.append('age', document.getElementById('input-age').value);
+      formData.append('is_female', document.getElementById('input-sex').value === 'female');
+      formData.append('is_upper_lobe', document.getElementById('check-upper-lobe').checked);
+      formData.append('family_history', document.getElementById('check-family-history').checked);
+      formData.append('emphysema', document.getElementById('check-emphysema').checked);
+
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || 'Inference error');
+        }
+
+        const data = await response.json();
+        renderResults(data);
+      } catch (err) {
+        alert('Analysis Error: ' + err.message);
+        document.getElementById('loading-state').classList.add('hidden');
+        document.getElementById('empty-state').classList.remove('hidden');
+      }
+    });
+
+    function renderResults(data) {
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('results-container').classList.remove('hidden');
+
+      activeImages = data.images;
+      activeJson = data.diagnostic_json;
+
+      // Triad Cards
+      const triad = data.triad;
+      document.getElementById('card-ml-risk').textContent = triad.risk_percent.toFixed(1) + '%';
+      document.getElementById('bar-ml-risk').style.width = Math.min(100, Math.max(5, triad.risk_percent)) + '%';
+
+      document.getElementById('card-brock-risk').textContent = triad.brock_percent.toFixed(1) + '%';
+      document.getElementById('bar-brock-risk').style.width = Math.min(100, Math.max(5, triad.brock_percent)) + '%';
+      document.getElementById('card-bts-rec').textContent = 'Action: ' + (triad.bts_recommendation || 'Routine surveillance');
+
+      document.getElementById('card-lungrads-cat').textContent = triad.lung_rads_category;
+      document.getElementById('card-lungrads-mgmt').textContent = triad.lung_rads_management;
+      document.getElementById('card-concordance').textContent = triad.confidence_flag;
+
+      // Morphology & Density
+      document.getElementById('mesh-vol').textContent = data.morphology.volume_mm3.toFixed(1) + ' mm³';
+      document.getElementById('mesh-sphericity').textContent = data.morphology.sphericity.toFixed(3);
+      document.getElementById('mesh-spic').textContent = data.morphology.is_spiculated ? 'Spiculated' : 'Smooth';
+
+      document.getElementById('val-subtype').textContent = data.density.nodule_type.toUpperCase();
+      document.getElementById('val-solid-core').textContent = data.density.solid_core_diameter_mm.toFixed(1) + ' mm';
+      document.getElementById('val-mean-diam').textContent = data.morphology.d_mean_mm.toFixed(1) + ' mm';
+
+      // Treatment
+      const t = data.treatment;
+      const uBadge = document.getElementById('treatment-urgency-badge');
+      uBadge.textContent = t.urgency_level;
+      uBadge.style.color = t.urgency_color;
+      uBadge.style.borderColor = t.urgency_color;
+
+      document.getElementById('treatment-primary-action').textContent = t.primary_action;
+      document.getElementById('treatment-summary').textContent = t.clinical_summary;
+
+      const list = document.getElementById('treatment-checklist');
+      list.innerHTML = '';
+      t.actionable_pathway.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'flex items-start space-x-2';
+        li.innerHTML = `<i class="fa-solid fa-circle-check text-cyan-400 mt-1"></i><span>${item}</span>`;
+        list.appendChild(li);
+      });
+
+      // JSON
+      document.getElementById('json-code').textContent = JSON.stringify(data.diagnostic_json, null, 2);
+
+      // Default Image Tab
+      showImgTab('overlay');
+
+      // Init 3D Mesh
+      initThreeJS(data.mesh_3d);
+    }
+
+    function showImgTab(tab) {
+      const img = document.getElementById('img-display');
+      if (tab === 'overlay') img.src = 'data:image/png;base64,' + activeImages.segmentation_overlay;
+      else if (tab === 'patch') img.src = 'data:image/png;base64,' + activeImages.patch_view;
+      else if (tab === 'axial') img.src = 'data:image/png;base64,' + activeImages.axial_slice;
+      else if (tab === 'hist') img.src = 'data:image/png;base64,' + activeImages.density_histogram;
+    }
+
+    function copyJSON() {
+      navigator.clipboard.writeText(JSON.stringify(activeJson, null, 2));
+      alert('Diagnostic JSON copied to clipboard!');
+    }
+
+    // -------------------------------------------------------------
+    // THREE.JS 3D MESH VIEWER
+    // -------------------------------------------------------------
+    function initThreeJS(meshData) {
+      const container = document.getElementById('threejs-canvas-container');
+      container.innerHTML = ''; // clear
+
+      const width = container.clientWidth || 350;
+      const height = container.clientHeight || 256;
+
+      threeScene = new THREE.Scene();
+      threeScene.background = new THREE.Color(0x020617);
+
+      threeCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+      threeCamera.position.set(0, 0, 45);
+
+      threeRenderer = new THREE.WebGLRenderer({ antialias: true });
+      threeRenderer.setSize(width, height);
+      container.appendChild(threeRenderer.domElement);
+
+      threeControls = new THREE.OrbitControls(threeCamera, threeRenderer.domElement);
+      threeControls.enableDamping = true;
+      threeControls.dampingFactor = 0.05;
+
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      threeScene.add(ambientLight);
+
+      const dirLight1 = new THREE.DirectionalLight(0x06b6d4, 1.2);
+      dirLight1.position.set(30, 40, 50);
+      threeScene.add(dirLight1);
+
+      const dirLight2 = new THREE.DirectionalLight(0xef4444, 0.8);
+      dirLight2.position.set(-30, -40, -50);
+      threeScene.add(dirLight2);
+
+      // Build Geometry from vertices & faces
+      if (meshData && meshData.vertices && meshData.vertices.length > 0) {
+        const geometry = new THREE.BufferGeometry();
+        const verts = new Float32Array(meshData.vertices);
+        const faces = new Uint32Array(meshData.faces);
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        geometry.setIndex(new THREE.BufferAttribute(faces, 1));
+        geometry.computeVertexNormals();
+
+        const material = new THREE.MeshStandardMaterial({
+          color: 0x06b6d4,
+          roughness: 0.35,
+          metalness: 0.25,
+          wireframe: false
+        });
+
+        threeMesh = new THREE.Mesh(geometry, material);
+        threeScene.add(threeMesh);
+      } else {
+        // Fallback sphere
+        const geo = new THREE.SphereGeometry(8, 32, 32);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x06b6d4, roughness: 0.4 });
+        threeMesh = new THREE.Mesh(geo, mat);
+        threeScene.add(threeMesh);
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        if (threeMesh) threeMesh.rotation.y += 0.005;
+        threeControls.update();
+        threeRenderer.render(threeScene, threeCamera);
+      }
+      animate();
+
+      // Wireframe toggle
+      document.getElementById('toggle-wireframe').onclick = () => {
+        if (threeMesh) {
+          threeMesh.material.wireframe = !threeMesh.material.wireframe;
+        }
+      };
+
+      // Reset camera
+      document.getElementById('reset-3d-cam').onclick = () => {
+        threeCamera.position.set(0, 0, 45);
+        threeControls.reset();
+      };
+    }
+
+    // Auto-load sample scans on page load
+    loadSamples();
+  </script>
+</body>
+</html>

@@ -62,7 +62,7 @@ def segment_patch_nodule(patch_hu: np.ndarray, expected_radius_vox: float) -> np
     return nodule_mask
 
 
-def test_real_scan(scan_idx: int = 0, series_uid: str = None, save_viz: bool = True):
+def run_real_scan_test(scan_idx: int = 0, series_uid: str = None, save_viz: bool = True):
     print("=" * 80)
     print("[*] PULMONARY NODULE RISK ASSESSMENT -- REAL SCAN INFERENCE")
     print("=" * 80)
@@ -249,7 +249,8 @@ def test_real_scan(scan_idx: int = 0, series_uid: str = None, save_viz: bool = T
 
         # Save diagnostic visualization
         if save_viz and nodule_i == 1:
-            out_img_path = os.path.join(BASE_DIR, "models", f"real_scan_inference_{uid[:12]}.png")
+            safe_uid = uid.replace(".", "_")[:16]
+            out_img_path = os.path.join(BASE_DIR, "models", f"real_scan_inference_{safe_uid}.png")
             fig, axes_pl = plt.subplots(1, 3, figsize=(15, 5))
 
             # Center slice of raw scan
@@ -294,4 +295,4 @@ if __name__ == "__main__":
     parser.add_argument("--series_uid", type=str, default=None, help="Specific SeriesUID to test")
     args = parser.parse_args()
 
-    test_real_scan(scan_idx=args.scan_idx, series_uid=args.series_uid)
+    run_real_scan_test(scan_idx=args.scan_idx, series_uid=args.series_uid)
